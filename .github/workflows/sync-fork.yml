@@ -1,0 +1,58 @@
+name: Sync Fork with Upstream
+
+on:
+  schedule:
+    # 每 6 小时自动同步一次
+    - cron: '0 */6 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout fork
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: main
+
+      - name: Configure git identity
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Fetch upstream
+        run: |
+          git remote add upstream https://github.com/ardeyouxipianyi/workbuddy2api-hub.git
+          git fetch upstream main
+
+      - name: Check if fork is behind upstream
+        id: check
+        run: |
+          BEHIND=$(git rev-list --count HEAD..upstream/main)
+          echo "behind=$BEHIND" >> "$GITHUB_OUTPUT"
+          echo "Fork is $BEHIND commit(s) behind upstream."
+
+      - name: Fast-forward main to upstream
+        if: steps.check.outputs.behind != '0'
+        run: |
+          git merge --ff-only upstream/main
+          git push origin main
+
+      - name: Open PR on divergence
+        if: failure()
+        run: |
+          git checkout -b sync/upstream-main
+          git merge upstream/main --no-edit || true
+          git push origin sync/upstream-main --force
+          gh pr create \
+            --title "sync: merge upstream/main" \
+            --body "Fork 已偏离上游，无法 fast-forward。此 PR 由自动同步工作流创建，请手动解决冲突后合并。Upstream: https://github.com/ardeyouxipianyi/workbuddy2api-hub" \
+            --base main \
+            --head sync/upstream-main || true
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
