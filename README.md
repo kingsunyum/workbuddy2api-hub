@@ -22,7 +22,7 @@
 This project is for protocol research and personal use only. Prefer the official client, do not use your primary account, and do not resell or share access.
 
 <p align="center">
-  <a href="https://github.com/ardeyouxipianyi/workbuddy2api-hub/releases"><img src="https://img.shields.io/badge/Release-v1.8.0-2496ED?style=flat-square" alt="Version 1.8.0"></a>
+  <a href="https://github.com/ardeyouxipianyi/workbuddy2api-hub/releases"><img src="https://img.shields.io/badge/Release-v1.9.2-2496ED?style=flat-square" alt="Version 1.9.2"></a>
   <img src="https://img.shields.io/badge/Python-3.9+-blue.svg?style=flat-square" alt="Python">
   <img src="https://img.shields.io/badge/API-OpenAI_Compatible-412991?style=flat-square" alt="OpenAI API">
   <img src="https://img.shields.io/badge/Dual_Realm-Intl_&_CN-0DBD8B?style=flat-square" alt="Dual Realm">
@@ -169,24 +169,40 @@ docker run -d --name wb-proxy-watchtower --restart unless-stopped \
 - **健康检查**：镜像自带 `HEALTHCHECK`（每 30s 探一次 `/health`），`docker ps` 的 STATUS 列会显示 healthy / unhealthy；
 - **源码构建**：`docker compose -f docker-compose.build.yml up -d --build`。
 
-### 6. 测试
+### 6. CodeArts 第三出口
+
+CodeArts 的 OAuth、token 续期、账号池、模型发现、聊天 SSE 和签到都由本进程直接完成，不需要再跑独立的 codearts2api 服务。
+
+- 顶部出口卡片从 `国际版 / 国内版` 变成 `国际版 / 国内版 / CodeArts`；
+- 选中 CodeArts 时，`/v1/models` 返回 CodeArts 的模型目录，`/v1/chat/completions`、`/v1/responses`、Anthropic Messages 都由本进程直连华为云；
+- API Key 可以绑定 `codearts` 出口，三个出口可以同时用；
+- 看板「账号」页的 CodeArts 视图可以添加（OAuth）、启用、停用、清冷却、签到、删除 CodeArts 账号。
+- CodeArts 账号支持绑定「账号代理槽」：在账号表的「出口」列选择槽位后，聊天、模型发现、token 续期、签到、积分查询都走该槽；槽位地址变化自动跟随，禁用或删除槽位回退直连。首次 OAuth 换取 token 时还没有账号可绑定，仍直连。
+
+**首次配置**
+
+1. 打开 wb-hub 看板 →「设置 → CodeArts 接入」，勾选「启用 CodeArts 出口」并保存。不需要 Base URL 或 API Key。
+2. 切到 CodeArts 视图，点「+ 添加账号 (OAuth)」完成华为云授权。
+3. 在「设置 → API Key 与出口绑定」里新建 Key，出口选 `CodeArts`，或留空跟随顶部默认出口。
+
+**口径与限制**
+
+- 账号、token 续期、冷却、签到、并发都由本进程直接执行；华为云凭据只存在本机 `accounts/codearts/`。
+- CodeArts 积分余额通过 `snap-manager/v1/statistics/plugin` 查询，看板显示剩余 / 总额 / 已用；单次请求的积分扣减上游不返回，最近请求表的积分列显示 `0.00`、估算价格显示 `—`。
+- CodeArts 出口不参与 WorkBuddy 的积分/额度护栏，也不参与 `国际版 → 国内版` 的跨出口回退。
+- API Key 的「允许账号」白名单同样限制 CodeArts 请求；没有列入任何 CodeArts 账号时不会使用其他账号。面板的账号选择当前主要面向 WorkBuddy 账号。
+- CodeArts 出口暂不支持图片输入；包含图片的请求会返回错误，不会静默丢弃图片。
+- CodeArts 出口没有 wb-hub 的 web_search / web_fetch 代跑；客户端自带工具照常透传。
+- `/codearts/*` 管理端点只接受面板会话，不接受普通 API Key；删除账号不可恢复。
+
+### 7. 测试
 
 ```bash
 python tests/run_all.py            # 全部套件
 python tests/run_all.py realm      # 只跑名字里含 realm 的
 ```
 
-- 209 个套件：156 个 Python + 53 个 JS；JS 需要 PATH 上有 `node`，缺失时会跳过并提示。
-- 211 个套件：158 个 Python + 53 个 JS；JS 需要 PATH 上有 `node`，缺失时会跳过并提示。
-- 211 个套件：157 个 Python + 54 个 JS；JS 需要 PATH 上有 `node`，缺失时会跳过并提示。
-- 211 个套件：158 个 Python + 53 个 JS；JS 需要 PATH 上有 `node`，缺失时会跳过并提示。
-- 211 个套件：157 个 Python + 54 个 JS；JS 需要 PATH 上有 `node`，缺失时会跳过并提示。
-- 226 个套件：167 个 Python + 59 个 JS；JS 需要 PATH 上有 `node`，缺失时会跳过并提示。
-- 211 个套件：158 个 Python + 53 个 JS；JS 需要 PATH 上有 `node`，缺失时会跳过并提示。
-- 211 个套件：157 个 Python + 54 个 JS；JS 需要 PATH 上有 `node`，缺失时会跳过并提示。
-- 211 个套件：158 个 Python + 53 个 JS；JS 需要 PATH 上有 `node`，缺失时会跳过并提示。
-- 212 个套件：158 个 Python + 54 个 JS；JS 需要 PATH 上有 `node`，缺失时会跳过并提示。
-- 211 个套件：158 个 Python + 53 个 JS；JS 需要 PATH 上有 `node`，缺失时会跳过并提示。
+- 244 个套件：181 个 Python + 63 个 JS；JS 需要 PATH 上有 `node`，缺失时会跳过并提示。
 - `tests/_mobile_check.py` 是独立的 Playwright 手机/桌面布局检查器（需自行安装 Playwright），按需手动运行，不在上面的套件集里。
 - CI（`.github/workflows/tests.yml`）跑同一条命令：Ubuntu 上 python 3.9 与 3.12（3.9 是本项目声称的最低版本），Windows 上 python 3.12；推送 `v*` tag 时额外断言 **tag == 源码版本**（`-ci` 演练 tag 豁免）。
 
@@ -493,6 +509,20 @@ export ANTHROPIC_API_KEY="你在看板设置中添加并绑定的API_Key"
 
 <!-- 发版时：把下面的 Unreleased 段落整理成新版本号（## vX.Y.Z），整体移入 docs/CHANGELOG.md 顶部 -->
 
+- **CodeArts 第三出口（单进程）**：新增 `codearts` 出口，看板可在 `国际版 / 国内版 / CodeArts` 之间切换；`/v1/models`、`/v1/chat/completions`、`/v1/responses` 与 Anthropic Messages 都由本进程直连华为云。CodeArts 的 OAuth（PKCE + DPoP）、token 续期、账号池、模型发现（含限时福利）、聊天 SSE 与签到全部在 Python 进程内完成，不再依赖独立的 codearts2api 服务。看板「账号」页新增 CodeArts 视图，支持 OAuth 添加、启用/停用、清冷却、签到、删除；管理端点只接受面板会话，华为云凭据不出本机。默认关闭，未启用时行为与旧版一致。 / **CodeArts as a third exit, single process**: a new `codearts` realm that the panel can switch to alongside Global and China; `/v1/models`, `/v1/chat/completions`, `/v1/responses` and Anthropic Messages all talk to Huawei Cloud directly from this process. CodeArts OAuth (PKCE + DPoP), token renewal, the account pool, model discovery (including benefit models), the chat SSE stream and check-in all run inside the Python process, with no separate codearts2api service. The Accounts page gains a CodeArts view with OAuth add, enable/disable, cooldown clearing, check-in and delete; the management endpoints require a panel session and Huawei credentials never leave the machine. Off by default, so an unenabled install behaves exactly as before.
+- **CodeArts 账号代理槽**：CodeArts 账号可像 WorkBuddy 账号一样绑定「账号代理槽」，聊天、模型发现、token 续期、签到和积分查询都走绑定的出口；槽位地址变化自动跟随，禁用/删除槽位回退直连。首次 OAuth 换取 token 时还没有账号，仍直连。 / **CodeArts proxy slots**: CodeArts accounts can bind to the same account proxy slots as WorkBuddy accounts; chat, model discovery, token renewal, check-in and credit queries all use the bound exit. Slot URL changes follow automatically, while disabling/deleting a slot falls back to direct. The initial OAuth token exchange has no account yet and stays direct.
+
+- **Key 允许账号列表显示账号备注**（#708）：账号选择器显示并支持按备注搜索，便于区分昵称相近的账号；分组功能仍待 #707。
+- **今日活动不再将缺少本地记录显示为未签到**（#706）：当网关没有当天的加油站或成长计划记录时，徽章显示「无本地记录」，避免外部工具已签到却被误认为未签到。该状态仍来自网关本地记录，并未查询上游。
+- **单请求体上限可在面板调整**（#709）：设置页可将上限设为 1–256 MB，保存后立即生效；超限返回实际限制并提示缩小请求或临时调高上限。分块请求超限时直接关闭连接，避免等待客户端继续上传。尚未配置面板值时沿用 `WB_MAX_PAYLOAD_BYTES` 或默认 16 MB；面板值优先。提高限制会增加内存占用。
+- **修复设置页出现两张「上游响应头超时」卡片**：v1.9.0 引入账号级并发上限与会话粘滞键时，插入两个新区块的补丁把紧随其后的「上游响应头超时」整块又带了一份，于是同一张卡片在设置页出现两次，`id="setHeaderTimeout"` 与 `id="setHeaderTimeoutState"` 各重复一次。`getElementById` 只取文档顺序上的第一个，所以下面那张的输入框永远空着、状态胶囊永远不写字，而点它的「保存」读的是上面那张输入框的值——改下面那张，存进去的是上面那张的数字。删掉重复的那一块；`tests/_test_settings_load.js` 新增 1 项断言，钉住「标记里没有重复的 id」。 / Fix the duplicated upstream response-header timeout card on the settings page: when v1.9.0 added the per-account concurrency cap and the stable affinity key, the patch that inserted the two new blocks re-emitted the whole response-header-timeout card, so the page showed it twice with both `id="setHeaderTimeout"` and `id="setHeaderTimeoutState"` duplicated. `getElementById` returns only the first in document order, so the lower copy never received the value, its state chip stayed empty, and its 保存 button read the upper input — editing the lower card saved the upper card's number. The duplicate block is removed and `tests/_test_settings_load.js` gains one assertion that no element id repeats in the markup.
+- **看板「最近请求」的时间补上日期**：数据看板的「实时活动流」此前只打印 `HH:MM:SS`，昨天 22:11 的请求和今天 22:11 的在同一列里一模一样，往下翻一段就分不清哪条是刚进来的；现在同一天仍只显示时分秒，跨天的行补上月日（`MM-DD HH:MM`），时间戳缺失显示 `—` 而不是空白。只改显示，统计口径与 `/usage/recent` 的返回一字未动。新增 `tests/_test_recent_timestamp.js`（11 项断言）。 / Recent-requests stamps now carry their day: the live activity stream printed only `HH:MM:SS`, so 22:11 yesterday and 22:11 today were the same string in the same column. Rows from another day now print `MM-DD HH:MM`; today's rows stay time-only, and a row without a timestamp prints a dash. Display only — the accounting and the `/usage/recent` payload are unchanged. Covered by `tests/_test_recent_timestamp.js` (11 checks).
+- **面板密码加密异常明确报错**（#658）：解释器缺少 `hashlib.pbkdf2_hmac` 支持时（如 Windows SAC 拦截便携运行时 DLL），不再将计算异常吞成「密码错误」返回 401，而是明确返回 500 与环境排查指引；启动自检与 `/health`、`/panel/status` 暴露 `crypto_ok` 状态并在面板提示。新增 `tests/_test_panel_crypto_unavailable.py`。
+- **v1.9.1 发布**：集成 #692 与 #693，详见 [更新记录](docs/CHANGELOG.md#v191)。
+- **流式终止**：设置 `WB_STOP_AT_SSE_DONE=1` 后，收到上游 SSE `[DONE]` 立即结束读取；默认关闭，保持原有行为。 / **Stream termination**: set `WB_STOP_AT_SSE_DONE=1` to stop reading at the upstream SSE `[DONE]` marker; disabled by default to retain existing behavior.
+- **HTTP 错误正文**：设置 `WB_CACHE_HTTP_ERROR_BODY=1` 后缓存首次读取的错误正文，供后续读取使用；默认关闭。 / **HTTP error body**: set `WB_CACHE_HTTP_ERROR_BODY=1` to retain the first error-body read for later readers; disabled by default.
+
+- **v1.9.0 发布**：汇总 v1.8.0 之后的 10 个社区 PR（#649、#650、#652、#653、#669、#670、#671、#672、#684、#686）。完整变更、验证范围与已知限制见 **[docs/CHANGELOG.md](docs/CHANGELOG.md#v190)**；下一版的改动继续写在本段。
 - **v1.8.0 发布**：汇总 v1.7.33 之后的 #640、#642、#643、#645/#647，并补齐 #578、#618、#625 的发布记录。完整变更、验证范围与已知限制见 **[docs/CHANGELOG.md](docs/CHANGELOG.md#v180)**；下一版的改动继续写在本段。
 - **修正 CN 专属模型判定，并给 OpenCode 写入真实上下文上限**（#618 / #625）：`minimax-` 曾被当成整个模型家族的 CN 专属前缀，于是国际版也提供的 `minimax-m3.1-flash` 被本地 400 拦下。现在只保留确定的 CN 独占项（`deepseek-v4-pro*` 与显式 `minimax-m3`），同族其他模型按出口实际目录判断。OpenCode 一键配置此前只写空的模型条目，客户端只能回落到自己的 200k 默认值；现在把网关目录中的 `context_window` / `max_output` 写进 `limit.context` / `limit.output`，没有规格的条目仍保持空对象。新增回归覆盖。 / Narrow the China-only model gate and give OpenCode the real context limit (#618 / #625): `minimax-` used to mark the whole family as CN-exclusive, so the globally served `minimax-m3.1-flash` was refused locally with a 400. Only the confirmed China-only entries remain (`deepseek-v4-pro*` and the explicit `minimax-m3`); other members of the family follow the actual catalogue of the selected exit. OpenCode's one-click config used to write empty model entries, so it fell back to its own 200k default; the gateway's catalogue `context_window` / `max_output` now go into `limit.context` / `limit.output`, while entries without specs stay empty objects. Regression coverage added.
 - **流式回复在真实静默期发送 SSE 心跳**（#578）：上游思考期间可能长时间一个字节都不发，而客户端会把静默误判为断流；只在每次阻塞读之前检查心跳，恰好无法覆盖它。Chat、Responses 与 Anthropic Messages 三条流式路径现在共用后台 `SSEHeartbeat`：每 15 秒无写入就发送合法的 `: keepalive` 注释帧，与业务帧共用锁，保证不会截断 JSON；响应正常时不会多插帧，流结束后线程立即停止。新增 `tests/_test_stream_keepalive.py`（9 项，含读线程阻塞期间仍收到心跳与并发写入完整性），并复跑流式 id、usage 帧、断流错误帧与重试套件。 / Keep SSE streams alive through real upstream silence (#578): while the model is thinking the upstream may send nothing for longer than the client's idle window, and checking a heartbeat only before the next blocking read cannot cover that gap. Chat, Responses and Anthropic Messages now share a background `SSEHeartbeat`: after 15 idle seconds it writes a valid `: keepalive` comment frame under the same lock as application writes, so JSON frames cannot be split; responsive streams gain no extra frames and the thread stops as soon as the stream ends. Added `tests/_test_stream_keepalive.py` (9 checks, including heartbeat delivery while the reader is blocked and write integrity under contention), and re-ran the stream id, usage-frame, abort-frame and retry suites.
@@ -585,7 +615,7 @@ export ANTHROPIC_API_KEY="你在看板设置中添加并绑定的API_Key"
 - **DSH 一键配置放宽限流重试，修掉「对话到一半链接中断」**：WorkBuddy 的 429 冷却通常约一分钟，而 DSH 的默认 `retryPolicy` 是 `normal` / 最多 5 次 / 退避 500ms 起翻倍、封顶 10s——加起来不到 16 秒就放弃，冷却还没结束回合就以 `RATE_LIMIT` 失败。一键配置现在给 `wb-proxy` 单独写 `retryPolicy: {mode: normal, maxRetries: 8, backoff: {initialDelayMs: 2000, maxDelayMs: 30000, jitterRatio: 0.1}}`（合计约 2 分半），只影响 `wb-proxy`，其它 provider 仍用默认策略；字段与取值按 `@deepseek-ai/dsh-llm` 的 `RetryPolicySchema`。已经接入过的机器重新点一次「一键配置」即可补上这段（幂等），重启 DSH 生效。
   DSH's default per-provider retry policy (normal, at most 5 retries, 500ms→10s backoff, under 16 seconds in total) gives up before WorkBuddy's ~60s rate-limit cooldown ends, so the turn dies with `RATE_LIMIT` — which the user sees as the conversation breaking mid-flight. The one-click config now writes a wider `retryPolicy` for `wb-proxy` only (8 retries, 2s initial delay, 30s cap, ~2.5 minutes in total); other providers keep the default policy. Field names and bounds follow `@deepseek-ai/dsh-llm`'s `RetryPolicySchema`. Re-running the one-click config on an already-integrated machine adds it idempotently, and a DSH restart applies it.
 
-已发布版本的完整记录（v1.4.5 ~ v1.8.0，含每版的 PR 归属）见 **[docs/CHANGELOG.md](docs/CHANGELOG.md)**。
+已发布版本的完整记录（v1.4.5 ~ v1.9.2，含每版的 PR 归属）见 **[docs/CHANGELOG.md](docs/CHANGELOG.md)**。
 
 ## 七、致谢与引用声明 (Credits & References)
 
